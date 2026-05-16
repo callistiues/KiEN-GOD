@@ -1,390 +1,261 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>3D Natural Selection & Combat (Improved)</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden; 
-      background-color: #111;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    #ui-container {
-      position: absolute;
-      top: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(30, 30, 30, 0.85);
-      color: white;
-      padding: 15px 25px;
-      border-radius: 12px;
-      display: flex;
-      gap: 25px;
-      font-size: 16px;
-      z-index: 10;
-      pointer-events: none;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-      backdrop-filter: blur(5px);
-    }
-    #controls-hint {
-      position: absolute;
-      bottom: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 14px;
-      pointer-events: none;
-    }
-    span { font-weight: bold; color: #4CAF50; }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Evolution Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            background: rgba(30, 30, 30, 0.85);
+            padding: 15px 25px;
+            border-radius: 8px;
+            pointer-events: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        #ui span { color: #4CAF50; font-weight: bold; }
+        .stat { margin-bottom: 8px; font-size: 18px; }
+        canvas { display: block; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 </head>
 <body>
 
-  <div id="ui-container">
-    <div>Day: <span id="gen">1</span></div>
-    <div>Pop: <span id="pop">0</span></div>
-    <div>Avg Speed: <span id="avgSpeed">0</span></div>
-    <div>Avg Strength: <span id="avgStrength">0</span></div>
-  </div>
-  
-  <div id="controls-hint">Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
+    <div id="ui">
+        <div class="stat">Generation: <span id="gen">1</span></div>
+        <div class="stat">Time Left: <span id="time">10.0</span>s</div>
+        <div class="stat">Best Distance: <span id="best">0</span>m</div>
+    </div>
 
-  <script>
-    // --- 1. SET UP THE 3D SCENE ---
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a1a);
+    <script>
+        // --- 1. SET UP MATTER.JS PHYSICS ---
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              Runner = Matter.Runner,
+              Bodies = Matter.Bodies,
+              Composite = Matter.Composite,
+              Constraint = Matter.Constraint,
+              Events = Matter.Events;
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.set(0, 450, 550); 
+        const engine = Engine.create();
+        const world = engine.world;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    // Enable Shadows
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
-
-    // Add Orbit Controls (Camera interaction)
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; // Smooth inertia
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2 - 0.05; // Don't let camera go below ground
-
-    // Lighting (With Shadows)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-    
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight.position.set(100, 300, 100);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048; // High res shadows
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.left = -350;
-    dirLight.shadow.camera.right = 350;
-    dirLight.shadow.camera.top = 350;
-    dirLight.shadow.camera.bottom = -350;
-    scene.add(dirLight);
-
-    // Create the Arena Floor 
-    const WORLD_RADIUS = 300;
-    const floorGeo = new THREE.CircleGeometry(WORLD_RADIUS, 64);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2; 
-    floor.receiveShadow = true; // Floor receives shadows
-    scene.add(floor);
-
-    const ringGeo = new THREE.RingGeometry(WORLD_RADIUS - 2, WORLD_RADIUS, 64);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.5;
-    scene.add(ring);
-
-    // --- 2. SIMULATION LOGIC ---
-    let generation = 1;
-    let blobs = [];
-    let foods = [];
-    const FOOD_COUNT = 45;
-    const FOOD_SPAWN_RADIUS = 220;
-
-    const blobGeo = new THREE.SphereGeometry(6, 16, 16);
-    const foodGeo = new THREE.BoxGeometry(6, 6, 6);
-    const foodMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-
-    class Blob {
-      constructor(x, z, speed, strength = 50) {
-        this.speed = speed;
-        this.strength = strength;
-        this.energy = 300;
-        this.foodEaten = 0;
-        this.state = 'foraging';
-        this.fightCooldown = 0;
-        
-        this.x = x;
-        this.z = z;
-        this.homeX = x;
-        this.homeZ = z;
-        this.angle = Math.random() * Math.PI * 2;
-
-        this.material = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 });
-        this.mesh = new THREE.Mesh(blobGeo, this.material);
-        this.mesh.position.y = 6; 
-        this.mesh.castShadow = true; // Blobs cast shadows
-        this.updateColor();
-        scene.add(this.mesh);
-      }
-
-      updateColor() {
-        let hue = 280 - (this.strength * 2.8);
-        hue = Math.max(0, Math.min(280, hue));
-        this.material.color.setHSL(hue / 360, 1.0, 0.5);
-      }
-
-      update() {
-        if (this.state === 'done') return;
-
-        let energyCost = 0.5 + (this.speed * this.speed * 0.02);
-        this.energy -= energyCost;
-        if (this.fightCooldown > 0) this.fightCooldown--;
-
-        if (this.energy <= 0) {
-          this.state = 'done';
-          this.mesh.position.y = 3; 
-          this.material.color.setHex(0x333333); 
-          this.mesh.castShadow = false; // Dead blobs don't cast shadows
-          return;
-        }
-
-        let targetAngle = null;
-
-        if (this.state === 'foraging') {
-          let closestDist = Infinity;
-          let closestFood = null;
-
-          for (let f of foods) {
-            if (!f.eaten) {
-              let d = Math.hypot(this.x - f.x, this.z - f.z);
-              if (d < closestDist) {
-                closestDist = d;
-                closestFood = f;
-              }
+        // Set up the renderer
+        const render = Render.create({
+            element: document.body,
+            engine: engine,
+            options: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                wireframes: false,
+                background: '#1a1a1a',
+                hasBounds: true // Allows camera panning
             }
-          }
+        });
 
-          if (closestFood && closestDist < 100) {
-            targetAngle = Math.atan2(closestFood.z - this.z, closestFood.x - this.x);
-            if (closestDist < 8) { 
-              closestFood.eaten = true;
-              scene.remove(closestFood.mesh); 
-              this.foodEaten++;
-              this.mesh.position.y = 12; // Jump when eating
-              if (this.foodEaten >= 2) this.state = 'returning';
-            }
-          } else if (!closestFood && foods.filter(f => !f.eaten).length === 0) {
-             this.state = 'returning';
-          } else {
-             this.angle += (Math.random() - 0.5) * 0.4;
-          }
-          
-        } else if (this.state === 'returning') {
-          let d = Math.hypot(this.x - this.homeX, this.z - this.homeZ);
-          if (d <= this.speed * 2) {
-            this.x = this.homeX;
-            this.z = this.homeZ;
-            this.state = 'done';
-          } else {
-            targetAngle = Math.atan2(this.homeZ - this.z, this.homeX - this.x);
-          }
-        }
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
 
-        if (targetAngle !== null) {
-          let diff = targetAngle - this.angle;
-          while (diff < -Math.PI) diff += Math.PI * 2;
-          while (diff > Math.PI) diff -= Math.PI * 2;
-          this.angle += diff * 0.15; // Slightly sharper turning
-        }
+        // Create the ground (Very long rectangle)
+        const ground = Bodies.rectangle(5000, window.innerHeight - 50, 15000, 100, { 
+            isStatic: true,
+            friction: 0.8, // High friction so creatures can grip and crawl
+            render: { fillStyle: '#2ecc71' }
+        });
+        Composite.add(world, ground);
 
-        let distFromCenter = Math.hypot(this.x, this.z);
-        if (distFromCenter > WORLD_RADIUS - 10) {
-           this.angle = Math.atan2(-this.z, -this.x);
-        }
+        // --- 2. EVOLUTION SETTINGS ---
+        const POPULATION_SIZE = 25;
+        const GENERATION_TIME = 600; // Frames (approx 10 seconds at 60fps)
+        let generation = 1;
+        let timer = GENERATION_TIME;
+        let population = [];
+        let globalBestX = 0;
 
-        this.x += Math.cos(this.angle) * this.speed;
-        this.z += Math.sin(this.angle) * this.speed;
+        // --- 3. CREATURE CLASS ---
+        // A creature is a triangle of 3 nodes connected by 3 "muscles" (spring constraints).
+        class Creature {
+            constructor(x, y, dna, isChampion = false) {
+                this.isChampion = isChampion;
+                
+                // If no DNA is provided, create random DNA (Amplitude, Phase, Speed for 3 muscles)
+                this.dna = dna || [
+                    { amp: Math.random() * 30 + 10, phase: Math.random() * Math.PI * 2, speed: Math.random() * 0.1 + 0.05 },
+                    { amp: Math.random() * 30 + 10, phase: Math.random() * Math.PI * 2, speed: Math.random() * 0.1 + 0.05 },
+                    { amp: Math.random() * 30 + 10, phase: Math.random() * Math.PI * 2, speed: Math.random() * 0.1 + 0.05 }
+                ];
 
-        this.mesh.position.x = this.x;
-        this.mesh.position.z = this.z;
-        if (this.mesh.position.y > 6) this.mesh.position.y -= 0.5; 
-      }
-      
-      destroy() {
-         scene.remove(this.mesh);
-         this.material.dispose();
-      }
-    }
+                const color = isChampion ? '#ffd700' : `hsl(${Math.random()*360}, 70%, 60%)`;
+                const opacity = isChampion ? 1 : 0.6; // Make normal creatures slightly see-through
 
-    class Food {
-      constructor(x, z) {
-        this.x = x;
-        this.z = z;
-        this.eaten = false;
-        
-        this.mesh = new THREE.Mesh(foodGeo, foodMat);
-        this.mesh.position.set(x, 3, z);
-        this.mesh.rotation.y = Math.random() * Math.PI; 
-        this.mesh.castShadow = true; // Food casts shadows
-        scene.add(this.mesh);
-      }
-    }
+                // Collision group: negative numbers mean they WON'T collide with each other, only the ground
+                const group = Body.nextGroup(true); 
 
-    function spawnDay() {
-      foods.forEach(f => scene.remove(f.mesh));
-      foods = [];
-      
-      for (let i = 0; i < FOOD_COUNT; i++) {
-        let angle = Math.random() * Math.PI * 2;
-        let r = Math.random() * FOOD_SPAWN_RADIUS;
-        foods.push(new Food(Math.cos(angle) * r, Math.sin(angle) * r));
-      }
+                // Create 3 Nodes (Heavy circles)
+                this.nodes = [
+                    Bodies.circle(x, y - 40, 12, { friction: 0.8, density: 0.05, collisionFilter: { group: group }, render: { fillStyle: color, opacity: opacity } }),
+                    Bodies.circle(x - 30, y + 20, 12, { friction: 0.8, density: 0.05, collisionFilter: { group: group }, render: { fillStyle: color, opacity: opacity } }),
+                    Bodies.circle(x + 30, y + 20, 12, { friction: 0.8, density: 0.05, collisionFilter: { group: group }, render: { fillStyle: color, opacity: opacity } })
+                ];
 
-      if (generation === 1) {
-        for (let i = 0; i < 25; i++) {
-          let angle = (i / 25) * Math.PI * 2;
-          let bx = Math.cos(angle) * WORLD_RADIUS;
-          let bz = Math.sin(angle) * WORLD_RADIUS;
-          blobs.push(new Blob(bx, bz, 2, 50));
-        }
-      }
-    }
+                // Create 3 Muscles (Constraints)
+                const baseLen = 70;
+                this.muscles = [
+                    Constraint.create({ bodyA: this.nodes[0], bodyB: this.nodes[1], length: baseLen, stiffness: 0.1, render: { strokeStyle: color, lineWidth: 4 } }),
+                    Constraint.create({ bodyA: this.nodes[1], bodyB: this.nodes[2], length: baseLen, stiffness: 0.1, render: { strokeStyle: color, lineWidth: 4 } }),
+                    Constraint.create({ bodyA: this.nodes[2], bodyB: this.nodes[0], length: baseLen, stiffness: 0.1, render: { strokeStyle: color, lineWidth: 4 } })
+                ];
 
-    function handleCollisions() {
-      for (let i = 0; i < blobs.length; i++) {
-        for (let j = i + 1; j < blobs.length; j++) {
-          let b1 = blobs[i];
-          let b2 = blobs[j];
-
-          if (b1.state === 'done' || b2.state === 'done') continue;
-          if (b1.fightCooldown > 0 || b2.fightCooldown > 0) continue;
-
-          let dist = Math.hypot(b1.x - b2.x, b1.z - b2.z);
-          if (dist < 12) { 
-            if (Math.random() < 0.5) {
-              b1.strength = Math.min(100, b1.strength + 15);
-              b2.strength = Math.max(0, b2.strength - 15);
-            } else {
-              b2.strength = Math.min(100, b2.strength + 15);
-              b1.strength = Math.max(0, b1.strength - 15);
+                this.composite = Composite.create();
+                Composite.add(this.composite, this.nodes);
+                Composite.add(this.composite, this.muscles);
+                Composite.add(world, this.composite);
+                
+                this.time = 0;
             }
 
-            b1.updateColor();
-            b2.updateColor();
+            // Flex the muscles based on DNA
+            update() {
+                this.time++;
+                const baseLen = 70;
+                for (let i = 0; i < 3; i++) {
+                    const gene = this.dna[i];
+                    // Sine wave math to expand and contract muscles
+                    this.muscles[i].length = baseLen + gene.amp * Math.sin(this.time * gene.speed + gene.phase);
+                }
+            }
 
-            let bounceAngle = Math.atan2(b2.z - b1.z, b2.x - b1.x);
-            b1.angle = bounceAngle + Math.PI;
-            b2.angle = bounceAngle;
+            // Fitness is determined by how far Right (positive X) the center of the creature moved
+            getFitness() {
+                let sumX = 0;
+                this.nodes.forEach(n => sumX += n.position.x);
+                return sumX / 3; // Average X position of the 3 nodes
+            }
+
+            destroy() {
+                Composite.remove(world, this.composite);
+            }
+        }
+
+        // --- 4. GENETIC ALGORITHM LOGIC ---
+
+        function spawnPopulation() {
+            population = [];
+            for (let i = 0; i < POPULATION_SIZE; i++) {
+                // Spawn them all at X: 200, slightly above the ground
+                population.push(new Creature(200, window.innerHeight - 200)); 
+            }
+        }
+
+        function mutate(dna) {
+            let newDna = JSON.parse(JSON.stringify(dna)); // Deep copy
+            for (let i = 0; i < 3; i++) {
+                if (Math.random() < 0.3) newDna[i].amp += (Math.random() - 0.5) * 10;
+                if (Math.random() < 0.3) newDna[i].phase += (Math.random() - 0.5) * 1.0;
+                if (Math.random() < 0.3) newDna[i].speed += (Math.random() - 0.5) * 0.05;
+                
+                // Keep genes within reasonable physical limits
+                newDna[i].amp = Math.max(0, Math.min(50, newDna[i].amp));
+                newDna[i].speed = Math.max(0.01, Math.min(0.3, newDna[i].speed));
+            }
+            return newDna;
+        }
+
+        function nextGeneration() {
+            // 1. Sort population by fitness (highest X distance first)
+            population.sort((a, b) => b.getFitness() - a.getFitness());
             
-            b1.mesh.position.y = 15;
-            b2.mesh.position.y = 15;
+            let bestFitness = population[0].getFitness();
+            if (bestFitness > globalBestX) globalBestX = bestFitness;
 
-            b1.fightCooldown = 30; 
-            b2.fightCooldown = 30;
-          }
+            let nextGen = [];
+            
+            // 2. Elitism: Keep the absolute best creature exactly as it is (Color it Gold)
+            nextGen.push(new Creature(200, window.innerHeight - 200, population[0].dna, true));
+
+            // 3. Breed the rest from the top 5 performers
+            const topPerformers = population.slice(0, 5);
+            for (let i = 1; i < POPULATION_SIZE; i++) {
+                let parent = topPerformers[Math.floor(Math.random() * topPerformers.length)];
+                let childDna = mutate(parent.dna);
+                nextGen.push(new Creature(200, window.innerHeight - 200, childDna));
+            }
+
+            // 4. Destroy old bodies to free up memory
+            population.forEach(p => p.destroy());
+            
+            // 5. Reset for new day
+            population = nextGen;
+            generation++;
+            timer = GENERATION_TIME;
+            
+            // Reset Camera
+            Render.lookAt(render, {
+                min: { x: 0, y: 0 },
+                max: { x: window.innerWidth, y: window.innerHeight }
+            });
+            
+            updateUI();
         }
-      }
-    }
 
-    function endDay() {
-      let nextGenBlobs = [];
+        // --- 5. MAIN SIMULATION LOOP ---
+        const Body = Matter.Body;
 
-      for (let b of blobs) {
-        let distToHome = Math.hypot(b.x - b.homeX, b.z - b.homeZ);
-        let safelyHome = (distToHome < 20); 
+        Events.on(engine, 'beforeUpdate', function() {
+            if (population.length === 0) return;
 
-        if (safelyHome) {
-          let angle1 = Math.random() * Math.PI * 2;
-          let hx1 = Math.cos(angle1) * WORLD_RADIUS;
-          let hz1 = Math.sin(angle1) * WORLD_RADIUS;
+            // Update all creature muscles
+            population.forEach(p => p.update());
 
-          if (b.foodEaten >= 1) {
-             nextGenBlobs.push(new Blob(hx1, hz1, b.speed, b.strength));
-          }
-          if (b.foodEaten >= 2) {
-             let angle2 = Math.random() * Math.PI * 2;
-             let hx2 = Math.cos(angle2) * WORLD_RADIUS;
-             let hz2 = Math.sin(angle2) * WORLD_RADIUS;
-             
-             let speedMutation = (Math.random() - 0.5) * 1.5; 
-             let newSpeed = Math.max(0.5, b.speed + speedMutation); 
-             
-             let strengthMutation = (Math.random() - 0.5) * 10;
-             let newStrength = Math.max(0, Math.min(100, b.strength + strengthMutation));
+            // Track time
+            timer--;
+            document.getElementById('time').innerText = (timer / 60).toFixed(1);
 
-             nextGenBlobs.push(new Blob(hx2, hz2, newSpeed, newStrength));
-          }
+            // Dynamic Camera: Follow the creature that is furthest to the right
+            let currentBestX = 0;
+            population.forEach(p => {
+                let x = p.getFitness();
+                if (x > currentBestX) currentBestX = x;
+            });
+            
+            // Smoothly pan camera
+            Render.lookAt(render, {
+                min: { x: currentBestX - 400, y: window.innerHeight - 600 },
+                max: { x: currentBestX + window.innerWidth - 400, y: window.innerHeight }
+            });
+
+            if (timer <= 0) {
+                nextGeneration();
+            }
+        });
+
+        function updateUI() {
+            document.getElementById('gen').innerText = generation;
+            // Convert pixels to an arbitrary "meters" unit for display
+            document.getElementById('best').innerText = (globalBestX / 100).toFixed(1);
         }
-        b.destroy(); 
-      }
 
-      blobs = nextGenBlobs;
-      generation++;
-      spawnDay();
-      updateUI();
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            render.canvas.width = window.innerWidth;
+            render.canvas.height = window.innerHeight;
+        });
 
-      if (blobs.length === 0) {
-          alert("Extinction! Restarting simulation.");
-          generation = 1;
-          spawnDay();
-          updateUI();
-      }
-    }
+        // Start!
+        spawnPopulation();
 
-    function updateUI() {
-      document.getElementById('gen').innerText = generation;
-      document.getElementById('pop').innerText = blobs.length;
-      let avgSpd = blobs.reduce((sum, b) => sum + b.speed, 0) / (blobs.length || 1);
-      document.getElementById('avgSpeed').innerText = avgSpd.toFixed(2);
-      let avgStr = blobs.reduce((sum, b) => sum + b.strength, 0) / (blobs.length || 1);
-      document.getElementById('avgStrength').innerText = avgStr.toFixed(0);
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      controls.update(); // Update camera controls
-
-      let activeBlobs = false;
-      for (let b of blobs) {
-        b.update();
-        if (b.state !== 'done') activeBlobs = true; 
-      }
-
-      handleCollisions();
-
-      renderer.render(scene, camera);
-
-      if (!activeBlobs && !window.dayTransitioning) {
-        window.dayTransitioning = true;
-        document.getElementById('gen').innerText = generation + " (Processing...)"; // Let user know it's thinking
-        setTimeout(() => {
-           endDay();
-           window.dayTransitioning = false;
-        }, 1000); 
-      }
-    }
-
-    window.addEventListener('resize', () => {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-    });
-
-    spawnDay();
-    updateUI();
-    animate();
-  </script>
+    </script>
 </body>
 </html>
