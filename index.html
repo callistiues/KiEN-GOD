@@ -2,207 +2,63 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Evolution Simulator</title>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+  <title>3D Natural Selection & Combat (Improved)</title>
   <style>
-    /* --- CSS TO MATCH MINUTELABS UI --- */
     body {
       margin: 0;
-      overflow: hidden;
-      background-color: #222222;
+      overflow: hidden; 
+      background-color: #111;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #dddddd;
     }
-
-    /* Top Navigation */
-    #top-nav {
+    #ui-container {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      padding: 20px;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(30, 30, 30, 0.85);
+      color: white;
+      padding: 15px 25px;
+      border-radius: 12px;
       display: flex;
-      align-items: center;
-      gap: 20px;
+      gap: 25px;
+      font-size: 16px;
       z-index: 10;
       pointer-events: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      backdrop-filter: blur(5px);
     }
-    #top-nav h2 {
-      margin: 0;
-      font-weight: 400;
-      color: #999;
-      font-size: 22px;
-    }
-    #top-nav h2.active { color: #ffffff; }
-    .btn-settings {
-      background-color: #20b2aa;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 16px;
-      pointer-events: auto;
-      cursor: pointer;
-      margin-top: 40px;
+    #controls-hint {
       position: absolute;
-      left: 20px;
-    }
-
-    /* Floating Side Toolbar */
-    #side-toolbar {
-      position: absolute;
-      right: 20px;
-      top: 100px;
-      background: linear-gradient(to bottom, #2a2a2a, #4a5d58);
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      padding: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-      z-index: 10;
-      pointer-events: auto;
-    }
-    .tool-btn {
-      background: none;
-      border: none;
-      color: #20b2aa;
-      font-size: 20px;
-      padding: 15px 10px;
-      cursor: pointer;
-      transition: color 0.2s;
-    }
-    .tool-btn:hover { color: #ffffff; }
-    .tool-btn.inactive { color: #666; }
-
-    /* Playback Controls */
-    #playback {
-      position: absolute;
-      bottom: 160px; /* Right above the timeline */
+      bottom: 15px;
       left: 50%;
       transform: translateX(-50%);
-      display: flex;
-      gap: 30px;
-      align-items: center;
-      z-index: 10;
-    }
-    .play-btn {
-      background: none;
-      border: none;
-      color: #aaa;
-      font-size: 24px;
-      cursor: pointer;
-    }
-    .play-btn.main { font-size: 32px; color: #cca573; }
-
-    /* Bottom Timeline */
-    #timeline {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      height: 140px;
-      background-color: #111111;
-      border-top: 3px solid #20b2aa;
-      display: flex;
-      align-items: center;
-      padding: 0 20px;
-      box-sizing: border-box;
-      gap: 15px;
-      overflow-x: hidden;
-      z-index: 10;
-    }
-    .generation-marker {
-      width: 100px;
-      height: 140px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-    .generation-marker.active {
-      background-color: #1a2a27;
-    }
-    .generation-marker.active::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      width: 0; 
-      height: 0; 
-      border-left: 50px solid transparent;
-      border-right: 50px solid transparent;
-      border-bottom: 20px solid #1a2a27;
-      transform: translateY(-100%);
-    }
-    /* Mock Pie Charts using Conic Gradients */
-    .pie-chart {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      background: conic-gradient(#20b2aa 0% 40%, #f1c40f 40% 60%, #e74c3c 60% 75%, #ecf0f1 75% 100%);
-      margin-bottom: 10px;
-    }
-    .gen-label {
+      color: rgba(255, 255, 255, 0.5);
       font-size: 14px;
-      color: #ddd;
+      pointer-events: none;
     }
-    .timeline-title {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 12px;
-      letter-spacing: 2px;
-      color: #888;
-    }
+    span { font-weight: bold; color: #4CAF50; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 
-  <div id="top-nav">
-    <i class="fa-solid fa-lightbulb" style="font-size: 28px; color: #ccc;"></i>
-    <h2>About</h2>
-    <h2 class="active">World</h2>
-    <h2>Trends</h2>
+  <div id="ui-container">
+    <div>Day: <span id="gen">1</span></div>
+    <div>Pop: <span id="pop">0</span></div>
+    <div>Avg Speed: <span id="avgSpeed">0</span></div>
+    <div>Avg Strength: <span id="avgStrength">0</span></div>
   </div>
-  <button class="btn-settings">settings</button>
-
-  <div id="side-toolbar">
-    <button class="tool-btn inactive"><i class="fa-solid fa-caret-up"></i></button>
-    <button class="tool-btn"><i class="fa-solid fa-eye"></i></button>
-    <button class="tool-btn"><i class="fa-solid fa-person-running"></i></button>
-    <button class="tool-btn inactive"><i class="fa-solid fa-bolt"></i></button>
-    <button class="tool-btn inactive"><i class="fa-solid fa-utensils"></i></button>
-  </div>
-
-  <div id="playback">
-    <button class="play-btn"><i class="fa-solid fa-chevron-left"></i></button>
-    <button class="play-btn main"><i class="fa-solid fa-play"></i></button>
-    <button class="play-btn"><i class="fa-solid fa-chevron-right"></i></button>
-    <button class="play-btn" style="margin-left: 20px;"><i class="fa-solid fa-forward-step"></i></button>
-  </div>
-
-  <div id="timeline">
-    <div class="timeline-title">GENERATIONS</div>
-  </div>
+  
+  <div id="controls-hint">Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
 
   <script>
-    // --- 1. SETUP 3D SCENE ---
+    // --- 1. SET UP THE 3D SCENE ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x222222);
+    scene.background = new THREE.Color(0x1a1a1a);
 
-    // Isometric-style Camera Setup
-    const aspect = window.innerWidth / window.innerHeight;
-    const d = 350; // View size
-    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 2000);
-    
-    // Position camera exactly like the screenshot (Isometric looking down)
-    camera.position.set(400, 400, 400); 
-    camera.lookAt(0, 0, 0);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 450, 550); 
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -210,163 +66,329 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
-    // Lighting to match the soft MinuteLabs look
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; 
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05; 
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    dirLight.position.set(100, 300, 200);
+    
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(100, 300, 100);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.width = 2048; 
     dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.left = -350;
+    dirLight.shadow.camera.right = 350;
+    dirLight.shadow.camera.top = 350;
+    dirLight.shadow.camera.bottom = -350;
     scene.add(dirLight);
 
-    // --- 2. CREATE THE BOARD ---
-    const BOARD_SIZE = 500;
-    
-    // The thick square platform
-    const boardGeo = new THREE.BoxGeometry(BOARD_SIZE, 20, BOARD_SIZE);
-    
-    // Create materials for top (white) and sides (gray)
-    const topMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
-    const sideMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 1 });
-    const materials = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
-    
-    const board = new THREE.Mesh(boardGeo, materials);
-    board.position.y = -10; // Push down so surface is at Y=0
-    board.receiveShadow = true;
-    scene.add(board);
+    const WORLD_RADIUS = 300;
+    const floorGeo = new THREE.CircleGeometry(WORLD_RADIUS, 64);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.8 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2; 
+    floor.receiveShadow = true; 
+    scene.add(floor);
 
-    // --- 3. CREATURES AND FOOD ---
+    const ringGeo = new THREE.RingGeometry(WORLD_RADIUS - 2, WORLD_RADIUS, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.5;
+    scene.add(ring);
+
+    // --- 2. SIMULATION LOGIC ---
+    let generation = 1;
     let blobs = [];
     let foods = [];
-    const FOOD_COUNT = 50;
+    const FOOD_COUNT = 45;
+    const FOOD_SPAWN_RADIUS = 220;
 
-    // Teardrop Shape: A stretched sphere
     const blobGeo = new THREE.SphereGeometry(6, 16, 16);
-    // Food Shape: Small sphere
-    const foodGeo = new THREE.SphereGeometry(3, 8, 8);
-    const foodMat = new THREE.MeshStandardMaterial({ color: 0x689f38 }); // Green dot
+    const foodGeo = new THREE.BoxGeometry(6, 6, 6);
+    const foodMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
     class Blob {
-      constructor(x, z) {
+      constructor(x, z, speed, strength = 50) {
+        this.speed = speed;
+        this.strength = strength;
+        this.energy = 300;
+        this.foodEaten = 0;
+        this.state = 'foraging';
+        this.fightCooldown = 0;
+        
         this.x = x;
         this.z = z;
-        this.speed = Math.random() * 1.5 + 0.5;
+        this.homeX = x;
+        this.homeZ = z;
         this.angle = Math.random() * Math.PI * 2;
-        
-        // Teardrop material (Dark blue-ish like screenshot)
-        this.material = new THREE.MeshStandardMaterial({ color: 0x3d6889, roughness: 0.5 });
+
+        this.material = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.1 });
         this.mesh = new THREE.Mesh(blobGeo, this.material);
         
-        // Stretch it to look like a teardrop/egg
-        this.mesh.scale.set(1, 1.5, 1);
+        // --- VISUAL CHANGE: Make them taller ---
+        this.mesh.scale.set(1, 1.6, 1); 
+        this.mesh.position.y = 9; // Adjusted resting height so it doesn't clip
         
-        this.mesh.position.set(this.x, 9, this.z);
-        this.mesh.castShadow = true;
+        this.mesh.castShadow = true; 
+        this.updateColor();
         scene.add(this.mesh);
       }
 
+      updateColor() {
+        let hue = 280 - (this.strength * 2.8);
+        hue = Math.max(0, Math.min(280, hue));
+        this.material.color.setHSL(hue / 360, 1.0, 0.5);
+      }
+
       update() {
-        // Simple wandering logic to make the board look alive
-        this.angle += (Math.random() - 0.5) * 0.2;
-        
+        if (this.state === 'done') return;
+
+        let energyCost = 0.5 + (this.speed * this.speed * 0.02);
+        this.energy -= energyCost;
+        if (this.fightCooldown > 0) this.fightCooldown--;
+
+        if (this.energy <= 0) {
+          this.state = 'done';
+          this.mesh.position.y = 4.5; // Sink slightly when dead
+          this.material.color.setHex(0x333333); 
+          this.mesh.castShadow = false; 
+          return;
+        }
+
+        let targetAngle = null;
+
+        if (this.state === 'foraging') {
+          let closestDist = Infinity;
+          let closestFood = null;
+
+          for (let f of foods) {
+            if (!f.eaten) {
+              let d = Math.hypot(this.x - f.x, this.z - f.z);
+              if (d < closestDist) {
+                closestDist = d;
+                closestFood = f;
+              }
+            }
+          }
+
+          if (closestFood && closestDist < 100) {
+            targetAngle = Math.atan2(closestFood.z - this.z, closestFood.x - this.x);
+            if (closestDist < 8) { 
+              closestFood.eaten = true;
+              scene.remove(closestFood.mesh); 
+              this.foodEaten++;
+              this.mesh.position.y = 16; // Jump higher when eating
+              
+              // RULE CHECK: 2 food eaten triggers return home
+              if (this.foodEaten >= 2) this.state = 'returning';
+            }
+          } else if (!closestFood && foods.filter(f => !f.eaten).length === 0) {
+             this.state = 'returning';
+          } else {
+             this.angle += (Math.random() - 0.5) * 0.4;
+          }
+          
+        } else if (this.state === 'returning') {
+          let d = Math.hypot(this.x - this.homeX, this.z - this.homeZ);
+          if (d <= this.speed * 2) {
+            this.x = this.homeX;
+            this.z = this.homeZ;
+            this.state = 'done';
+          } else {
+            targetAngle = Math.atan2(this.homeZ - this.z, this.homeX - this.x);
+          }
+        }
+
+        if (targetAngle !== null) {
+          let diff = targetAngle - this.angle;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          this.angle += diff * 0.15; 
+        }
+
+        let distFromCenter = Math.hypot(this.x, this.z);
+        if (distFromCenter > WORLD_RADIUS - 10) {
+           this.angle = Math.atan2(-this.z, -this.x);
+        }
+
         this.x += Math.cos(this.angle) * this.speed;
         this.z += Math.sin(this.angle) * this.speed;
 
-        // Keep them on the square board
-        const bounds = (BOARD_SIZE / 2) - 10;
-        if (this.x > bounds || this.x < -bounds || this.z > bounds || this.z < -bounds) {
-          this.angle += Math.PI; // Turn around
-          this.x = Math.max(-bounds, Math.min(bounds, this.x));
-          this.z = Math.max(-bounds, Math.min(bounds, this.z));
-        }
-
         this.mesh.position.x = this.x;
         this.mesh.position.z = this.z;
-        
-        // Tilt slightly in the direction of movement
-        this.mesh.rotation.z = Math.cos(this.angle) * -0.2;
-        this.mesh.rotation.x = Math.sin(this.angle) * 0.2;
+        if (this.mesh.position.y > 9) this.mesh.position.y -= 0.5; // Gravity brings back to normal height
+      }
+      
+      destroy() {
+         scene.remove(this.mesh);
+         this.material.dispose();
       }
     }
 
     class Food {
       constructor(x, z) {
+        this.x = x;
+        this.z = z;
+        this.eaten = false;
+        
         this.mesh = new THREE.Mesh(foodGeo, foodMat);
         this.mesh.position.set(x, 3, z);
-        this.mesh.receiveShadow = true;
+        this.mesh.rotation.y = Math.random() * Math.PI; 
+        this.mesh.castShadow = true; 
         scene.add(this.mesh);
       }
     }
 
-    function initWorld() {
-      // Spawn Food
-      const bounds = (BOARD_SIZE / 2) - 20;
-      for (let i = 0; i < FOOD_COUNT; i++) {
-        let x = (Math.random() * bounds * 2) - bounds;
-        let z = (Math.random() * bounds * 2) - bounds;
-        foods.push(new Food(x, z));
-      }
-
-      // Spawn Blobs
-      for (let i = 0; i < 40; i++) {
-        let x = (Math.random() * bounds * 2) - bounds;
-        let z = (Math.random() * bounds * 2) - bounds;
-        blobs.push(new Blob(x, z));
-      }
+    function spawnDay() {
+      foods.forEach(f => scene.remove(f.mesh));
+      foods = [];
       
-      buildTimeline();
-    }
+      for (let i = 0; i < FOOD_COUNT; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let r = Math.random() * FOOD_SPAWN_RADIUS;
+        foods.push(new Food(Math.cos(angle) * r, Math.sin(angle) * r));
+      }
 
-    // --- 4. UI POPULATION ---
-    function buildTimeline() {
-      const timeline = document.getElementById('timeline');
-      // Generate 5 fake generation markers to match the look
-      for(let i = 1; i <= 5; i++) {
-        let marker = document.createElement('div');
-        marker.className = i === 2 ? 'generation-marker active' : 'generation-marker';
-        
-        let pie = document.createElement('div');
-        pie.className = 'pie-chart';
-        // Randomize the gradient a bit for visual variety
-        let p1 = Math.floor(Math.random() * 30 + 10);
-        let p2 = Math.floor(Math.random() * 30 + p1);
-        pie.style.background = `conic-gradient(#20b2aa 0% ${p1}%, #f1c40f ${p1}% ${p2}%, #ecf0f1 ${p2}% 100%)`;
-        
-        let label = document.createElement('div');
-        label.className = 'gen-label';
-        label.innerText = i;
-        
-        marker.appendChild(pie);
-        marker.appendChild(label);
-        timeline.appendChild(marker);
+      if (generation === 1) {
+        // --- LOGIC CHANGE: Start with exactly 6 orbs ---
+        for (let i = 0; i < 6; i++) {
+          let angle = (i / 6) * Math.PI * 2;
+          let bx = Math.cos(angle) * WORLD_RADIUS;
+          let bz = Math.sin(angle) * WORLD_RADIUS;
+          blobs.push(new Blob(bx, bz, 2, 50));
+        }
       }
     }
 
-    // --- 5. ANIMATION LOOP ---
+    function handleCollisions() {
+      for (let i = 0; i < blobs.length; i++) {
+        for (let j = i + 1; j < blobs.length; j++) {
+          let b1 = blobs[i];
+          let b2 = blobs[j];
+
+          if (b1.state === 'done' || b2.state === 'done') continue;
+          if (b1.fightCooldown > 0 || b2.fightCooldown > 0) continue;
+
+          let dist = Math.hypot(b1.x - b2.x, b1.z - b2.z);
+          if (dist < 12) { 
+            if (Math.random() < 0.5) {
+              b1.strength = Math.min(100, b1.strength + 15);
+              b2.strength = Math.max(0, b2.strength - 15);
+            } else {
+              b2.strength = Math.min(100, b2.strength + 15);
+              b1.strength = Math.max(0, b1.strength - 15);
+            }
+
+            b1.updateColor();
+            b2.updateColor();
+
+            let bounceAngle = Math.atan2(b2.z - b1.z, b2.x - b1.x);
+            b1.angle = bounceAngle + Math.PI;
+            b2.angle = bounceAngle;
+            
+            b1.mesh.position.y = 18; // Bounce height adjusted
+            b2.mesh.position.y = 18;
+
+            b1.fightCooldown = 30; 
+            b2.fightCooldown = 30;
+          }
+        }
+      }
+    }
+
+    function endDay() {
+      let nextGenBlobs = [];
+
+      for (let b of blobs) {
+        let distToHome = Math.hypot(b.x - b.homeX, b.z - b.homeZ);
+        let safelyHome = (distToHome < 20); 
+
+        if (safelyHome) {
+          let angle1 = Math.random() * Math.PI * 2;
+          let hx1 = Math.cos(angle1) * WORLD_RADIUS;
+          let hz1 = Math.sin(angle1) * WORLD_RADIUS;
+
+          // RULE: 1 Food = Survive (Keep stats, live to next day)
+          if (b.foodEaten >= 1) {
+             nextGenBlobs.push(new Blob(hx1, hz1, b.speed, b.strength));
+          }
+          // RULE: 2 Food = Reproduce (Create mutated offspring)
+          if (b.foodEaten >= 2) {
+             let angle2 = Math.random() * Math.PI * 2;
+             let hx2 = Math.cos(angle2) * WORLD_RADIUS;
+             let hz2 = Math.sin(angle2) * WORLD_RADIUS;
+             
+             let speedMutation = (Math.random() - 0.5) * 1.5; 
+             let newSpeed = Math.max(0.5, b.speed + speedMutation); 
+             
+             let strengthMutation = (Math.random() - 0.5) * 10;
+             let newStrength = Math.max(0, Math.min(100, b.strength + strengthMutation));
+
+             nextGenBlobs.push(new Blob(hx2, hz2, newSpeed, newStrength));
+          }
+        }
+        b.destroy(); 
+      }
+
+      blobs = nextGenBlobs;
+      generation++;
+      spawnDay();
+      updateUI();
+
+      if (blobs.length === 0) {
+          alert("Extinction! Restarting simulation.");
+          generation = 1;
+          spawnDay();
+          updateUI();
+      }
+    }
+
+    function updateUI() {
+      document.getElementById('gen').innerText = generation;
+      document.getElementById('pop').innerText = blobs.length;
+      let avgSpd = blobs.reduce((sum, b) => sum + b.speed, 0) / (blobs.length || 1);
+      document.getElementById('avgSpeed').innerText = avgSpd.toFixed(2);
+      let avgStr = blobs.reduce((sum, b) => sum + b.strength, 0) / (blobs.length || 1);
+      document.getElementById('avgStrength').innerText = avgStr.toFixed(0);
+    }
+
     function animate() {
       requestAnimationFrame(animate);
 
-      // Move blobs
+      controls.update(); 
+
+      let activeBlobs = false;
       for (let b of blobs) {
         b.update();
+        if (b.state !== 'done') activeBlobs = true; 
       }
 
+      handleCollisions();
+
       renderer.render(scene, camera);
+
+      if (!activeBlobs && !window.dayTransitioning) {
+        window.dayTransitioning = true;
+        document.getElementById('gen').innerText = generation + " (Processing...)"; 
+        setTimeout(() => {
+           endDay();
+           window.dayTransitioning = false;
+        }, 1000); 
+      }
     }
 
-    // Handle window resizing
     window.addEventListener('resize', () => {
-      const aspect = window.innerWidth / window.innerHeight;
-      camera.left = -d * aspect;
-      camera.right = d * aspect;
-      camera.top = d;
-      camera.bottom = -d;
-      camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
     });
 
-    initWorld();
+    spawnDay();
+    updateUI();
     animate();
   </script>
 </body>
